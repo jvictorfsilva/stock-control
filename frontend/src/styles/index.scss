@@ -1,0 +1,11 @@
+@use "@carbon/type";
+@include type.reset();
+
+@include type.default-type();
+
+@include type.type-classes();
+
+html,
+body {
+  margin: 0;
+}

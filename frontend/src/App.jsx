@@ -1,9 +1,21 @@
 import React from "react";
+import { Theme } from "@carbon/react";
+import AppHeader from "./components/Header";
+import ItemTable from "./components/ItemTable";
 
-export default function App() {
+import "./styles/styles.scss";
+
+function App() {
   return (
-    <div className="app">
-      <h1 className="bx--type-display-02">Welcome to the Frontend</h1>
-    </div>
+    <>
+      <Theme theme="g100">
+        <AppHeader />
+      </Theme>
+      <Theme theme="white">
+        <ItemTable />
+      </Theme>
+    </>
   );
 }
+
+export default App;

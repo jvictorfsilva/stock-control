@@ -15,7 +15,10 @@ function handleValidationErrors(req, res, next) {
 
 router.get("/", async (req, res) => {
   try {
-    const [rows] = await pool.query("SELECT * FROM items");
+    const [rows] = await pool.query(
+      `SELECT id, name, quantity, price, created_on, updated_on
+       FROM items`
+    );
     res.json(rows);
   } catch (err) {
     console.error("Error fetching items:", err);
@@ -44,10 +47,19 @@ router.post(
     try {
       const { name, quantity, price } = req.body;
       const [result] = await pool.execute(
-        "INSERT INTO items (name, quantity, price) VALUES (?, ?, ?)",
+        `INSERT INTO items (name, quantity, price, created_on, updated_on)
+         VALUES (?, ?, ?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
         [name, quantity, price]
       );
-      res.status(201).json({ id: result.insertId, name, quantity, price });
+      const insertId = result.insertId;
+      const [newItemRows] = await pool.query(
+        `SELECT created_on, updated_on FROM items WHERE id = ?`,
+        [insertId]
+      );
+      const { created_on, updated_on } = newItemRows[0];
+      res
+        .status(201)
+        .json({ id: insertId, name, quantity, price, created_on, updated_on });
     } catch (err) {
       console.error("Error creating item:", err);
       res.status(500).json({ error: "Internal server error" });
@@ -78,13 +90,20 @@ router.put(
       const id = Number(req.params.id);
       const { name, quantity, price } = req.body;
       const [result] = await pool.execute(
-        "UPDATE items SET name = ?, quantity = ?, price = ? WHERE id = ?",
+        `UPDATE items
+         SET name = ?, quantity = ?, price = ?, updated_on = UNIX_TIMESTAMP()
+         WHERE id = ?`,
         [name, quantity, price, id]
       );
       if (result.affectedRows === 0) {
         return res.status(404).json({ error: "Item not found" });
       }
-      res.json({ id, name, quantity, price });
+      const [updatedRows] = await pool.query(
+        `SELECT updated_on FROM items WHERE id = ?`,
+        [id]
+      );
+      const { updated_on } = updatedRows[0];
+      res.json({ id, name, quantity, price, updated_on });
     } catch (err) {
       console.error("Error updating item:", err);
       res.status(500).json({ error: "Internal server error" });

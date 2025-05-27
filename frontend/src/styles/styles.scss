@@ -1,17 +1,10 @@
 @use "@carbon/react";
 
-@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&display=swap");
-
-html,
-body {
-  font-family: "IBM Plex Sans", sans-serif;
-  margin: 0;
-  padding: 0;
+.cds--data-table-header {
+  padding-bottom: 0 !important;
 }
-
-.app {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
