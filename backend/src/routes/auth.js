@@ -1,5 +1,6 @@
 import express from "express";
 import { body, validationResult } from "express-validator";
+import { authenticate, authorizeAdmin } from "../middleware/auth.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import pool from "../db.js";
@@ -119,5 +120,39 @@ router.get("/validate-token", async (req, res) => {
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 });
+router.post(
+  "/change-role",
+  authenticate,
+  authorizeAdmin,
+  [
+    body("role")
+      .isString()
+      .notEmpty()
+      .withMessage("Role must be a non-empty string"),
+    body("email").isEmail().withMessage("Must be a valid email"),
+  ],
+  handleValidationErrors,
+  async (req, res) => {
+    const { role, email } = req.body;
+    console.log(req.body);
+    try {
+      const [result] = await pool.execute(
+        "UPDATE users SET role = ? WHERE email = ?",
+        [role, email]
+      );
+      if (result.affectedRows === 0) {
+        return res
+          .status(404)
+          .json({ error: `No user found with email '${email}'` });
+      }
+      return res.json({
+        message: `Role of '${email}' changed to '${role}' successfully.`,
+      });
+    } catch (err) {
+      logger.log("Error in /change-role", err);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
 
 export default router;
