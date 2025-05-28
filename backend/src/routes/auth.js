@@ -112,6 +112,7 @@ router.get("/validate-token", async (req, res) => {
       valid: true,
       userId: decoded.sub,
       username: decoded.username,
+      role: decoded.role,
     });
   } catch (err) {
     logger.log("Error in /auth/validate-token", err);
