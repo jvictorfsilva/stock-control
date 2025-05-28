@@ -21,12 +21,22 @@ import Cookies from "js-cookie";
 import api from "../services/api";
 import DeleteModal from "./DeleteModal";
 
-const formatDate = (unixTs) => {
+const formatDate = (unixTs = Math.floor(Date.now()) / 1000) => {
   const date = new Date(unixTs * 1000);
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   const year = date.getFullYear();
   return `${month}/${day}/${year}`;
+};
+const formatCurrentDateTime = () => {
+  const now = new Date();
+  const hours24 = now.getHours();
+  const hours12 = String(hours24 % 12 || 12).padStart(2, "0");
+  const minutes = String(now.getMinutes()).padStart(2, "0");
+  const seconds = String(now.getSeconds()).padStart(2, "0");
+  const ampm = hours24 >= 12 ? "PM" : "AM";
+
+  return `${hours12}:${minutes}:${seconds} ${ampm}`;
 };
 
 const ItemTable = () => {
@@ -46,6 +56,8 @@ const ItemTable = () => {
   const [notificationKind, setNotificationKind] = useState("success");
   const [notificationTitle, setNotificationTitle] = useState("");
   const [notificationSubtitle, setNotificationSubtitle] = useState("");
+
+  const [fetchError, setFetchError] = useState("");
 
   const headers = [
     { key: "id", header: "ID" },
@@ -69,8 +81,13 @@ const ItemTable = () => {
       }));
       setInitialRows(formattedData);
       setFilteredRows(formattedData);
-    } catch (e) {
-      console.error("Error fetching items", e);
+      setFetchError("");
+    } catch (err) {
+      setFetchError(
+        err.response?.data?.message ||
+          err.message ||
+          "Could not load items list."
+      );
       setNotificationKind("error");
       setNotificationTitle("Error Loading Items");
       setNotificationSubtitle(
@@ -82,9 +99,6 @@ const ItemTable = () => {
 
   useEffect(() => {
     fetchItems();
-  }, []);
-
-  useEffect(() => {
     return () => {
       if (pageInputDebounceTimeoutRef.current) {
         clearTimeout(pageInputDebounceTimeoutRef.current);
@@ -121,7 +135,10 @@ const ItemTable = () => {
   };
 
   const handleEdit = (id) => {
-    console.log(`Edit item ${id}`);
+    setNotificationKind("error");
+    setNotificationTitle("Error");
+    setNotificationSubtitle(`Editing item ${id} (not implemented).`);
+    setShowNotification(true);
   };
 
   const handleDeleteClick = (rowId) => {
@@ -174,18 +191,13 @@ const ItemTable = () => {
 
       setIsDangerModalOpen(false);
       setItemToDelete(null);
-    } catch (error) {
-      console.error("Error deleting item", error);
-      let errorMessage = "An error occurred while deleting the item.";
-      if (error.response && error.response.data && error.response.data.detail) {
-        errorMessage = error.response.data.detail;
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      setDeleteError(errorMessage);
+    } catch (err) {
+      const message =
+        err.response?.data?.detail || err.message || "Failed to delete item.";
+      setDeleteError(message);
       setNotificationKind("error");
       setNotificationTitle("Failed to Delete Item");
-      setNotificationSubtitle(errorMessage);
+      setNotificationSubtitle(message);
       setShowNotification(true);
     } finally {
       setDeleteLoading(false);
@@ -424,12 +436,12 @@ const ItemTable = () => {
           kind={notificationKind}
           title={notificationTitle}
           subtitle={notificationSubtitle}
-          caption=""
+          caption={formatCurrentDateTime()}
           timeout={5000}
           onCloseButtonClick={() => setShowNotification(false)}
           style={{
             position: "fixed",
-            bottom: "1rem",
+            top: "1rem",
             right: "1rem",
             zIndex: 9999,
           }}
