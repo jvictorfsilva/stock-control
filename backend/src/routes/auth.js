@@ -28,25 +28,20 @@ router.post(
     body("password")
       .isLength({ min: 6 })
       .withMessage("Password must be at least 6 characters"),
-    body("role")
-      .optional()
-      .isIn(["user", "admin"])
-      .withMessage("Role must be either user or admin"),
   ],
   handleValidationErrors,
   async (req, res) => {
     try {
-      const { username, email, password, role } = req.body;
+      const { username, email, password } = req.body;
       const hash = await bcrypt.hash(password, SALT_ROUNDS);
       const [result] = await pool.execute(
         "INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)",
-        [username, email, hash, role || "user"]
+        [username, email, hash, "user"]
       );
       res.status(201).json({
         id: result.insertId,
         username,
         email,
-        role: role || "user",
       });
     } catch (err) {
       logger.log("Error in /auth/register", err);
@@ -92,5 +87,36 @@ router.post(
     }
   }
 );
+
+router.get("/validate-token", async (req, res) => {
+  try {
+    const authHeader = req.headers["authorization"];
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(400).json({ error: "Token is required" });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    const [rows] = await pool.execute("SELECT id FROM users WHERE id = ?", [
+      decoded.sub,
+    ]);
+
+    if (rows.length === 0) {
+      return res.status(401).json({ error: "User no longer exists" });
+    }
+
+    return res.json({
+      valid: true,
+      userId: decoded.sub,
+      username: decoded.username,
+    });
+  } catch (err) {
+    logger.log("Error in /auth/validate-token", err);
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+});
 
 export default router;

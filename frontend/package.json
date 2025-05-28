@@ -15,6 +15,7 @@
     "@carbon/react": "^1.83.0",
     "@carbon/styles": "^1.82.0",
     "axios": "^1.9.0",
+    "js-cookie": "^3.0.5",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.1"

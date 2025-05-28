@@ -8,3 +8,14 @@ input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
+
+.delete-button {
+  background-color: #da1e28 !important;
+  color: #fff;
+}
+
+.delete-button:hover,
+.delete-button:focus {
+  background-color: #b81921 !important;
+  color: #fff;
+}
