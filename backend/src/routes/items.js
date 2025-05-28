@@ -1,9 +1,14 @@
 import express from "express";
-import pool from "../db.js";
+import { connectToDatabase } from "../db.js";
 import { authenticate, authorizeAdmin } from "../middleware/auth.js";
 import { body, param, validationResult } from "express-validator";
+import { ObjectId } from "mongodb";
 
 const router = express.Router();
+
+async function getDb() {
+  return await connectToDatabase();
+}
 
 function handleValidationErrors(req, res, next) {
   const errors = validationResult(req);
@@ -14,45 +19,77 @@ function handleValidationErrors(req, res, next) {
 }
 
 router.get("/", async (req, res) => {
+  const db = await getDb();
   try {
-    const [rows] = await pool.query(
-      `SELECT 
-        i.id,
-        i.name,
-        i.quantity,
-        i.price,
-        i.created_on,
-        i.updated_on,
-        c.name AS category_name
-      FROM items AS i
-      JOIN categories AS c
-          ON i.category_id = c.id
-      ORDER BY i.id ASC;
-`
-    );
-    res.json(rows);
+    const items = await db
+      .collection("items")
+      .aggregate([
+        {
+          $lookup: {
+            from: "categories",
+            localField: "category_id",
+            foreignField: "_id",
+            as: "category_info",
+          },
+        },
+        {
+          $unwind: {
+            path: "$category_info",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            quantity: 1,
+            price: 1,
+            created_on: 1,
+            updated_on: 1,
+            category_id: 1,
+            category_name: "$category_info.name",
+          },
+        },
+        {
+          $sort: { _id: 1 },
+        },
+      ])
+      .toArray();
+
+    const formattedItems = items.map((item) => ({ ...item, id: item._id }));
+    res.json(formattedItems);
   } catch (err) {
     console.error("Error fetching items:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
 router.get(
   "/:id",
-  [param("id").isInt().withMessage("ID must be an integer")],
+  [
+    param("id").custom((value) => {
+      if (!ObjectId.isValid(value)) {
+        throw new Error("ID must be a valid MongoDB ObjectId");
+      }
+      return true;
+    }),
+  ],
   handleValidationErrors,
   async (req, res) => {
+    const db = await getDb();
     try {
-      const id = Number(req.params.id);
-      const [rows] = await pool.query(
-        `SELECT name, quantity, price, category_id 
-         FROM items 
-         WHERE id = ?`,
-        [id]
-      );
-      if (rows.length === 0) {
+      const id = req.params.id;
+      const item = await db
+        .collection("items")
+        .findOne(
+          { _id: new ObjectId(id) },
+          { projection: { name: 1, quantity: 1, price: 1, category_id: 1 } }
+        );
+
+      if (!item) {
         return res.status(404).json({ error: "Item not found" });
       }
-      res.json(rows[0]);
+      res.json({ ...item, id: item._id });
     } catch (err) {
       console.error("Error fetching item by id:", err);
       res.status(500).json({ error: "Internal server error" });
@@ -76,32 +113,46 @@ router.post(
       .isFloat({ min: 0 })
       .withMessage("Price must be a non-negative number"),
     body("category")
-      .isInt({ min: 1 })
-      .withMessage("Category must be a non-negative integer"),
+      .custom((value) => {
+        if (!ObjectId.isValid(value)) {
+          throw new Error("Category ID must be a valid MongoDB ObjectId");
+        }
+        return true;
+      })
+      .withMessage("Category ID must be a valid ObjectId"),
   ],
   handleValidationErrors,
   async (req, res) => {
+    const db = await getDb();
     try {
-      const { name, quantity, price, category } = req.body;
-      const [result] = await pool.execute(
-        `INSERT INTO items (name, quantity, price, category_id, created_on, updated_on)
-         VALUES (?, ?, ?, ?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
-        [name, quantity, price, category]
-      );
-      const insertId = result.insertId;
-      const [newItemRows] = await pool.query(
-        `SELECT created_on, updated_on FROM items WHERE id = ?`,
-        [insertId]
-      );
-      const { created_on, updated_on } = newItemRows[0];
-      res.status(201).json({
-        id: insertId,
+      const { name, quantity, price, category: categoryIdString } = req.body;
+
+      const categoryExists = await db
+        .collection("categories")
+        .findOne({ _id: new ObjectId(categoryIdString) });
+      if (!categoryExists) {
+        return res
+          .status(400)
+          .json({ errors: [{ path: "category", msg: "Category not found" }] });
+      }
+
+      const newItem = {
         name,
-        quantity,
-        price,
-        category,
-        created_on,
-        updated_on,
+        quantity: parseInt(quantity, 10),
+        price: parseFloat(price),
+        category_id: new ObjectId(categoryIdString),
+        created_on: new Date(),
+        updated_on: new Date(),
+      };
+      const result = await db.collection("items").insertOne(newItem);
+      res.status(201).json({
+        id: result.insertedId,
+        name: newItem.name,
+        quantity: newItem.quantity,
+        price: newItem.price,
+        category: newItem.category_id.toHexString(),
+        created_on: newItem.created_on,
+        updated_on: newItem.updated_on,
       });
     } catch (err) {
       console.error("Error creating item:", err);
@@ -115,7 +166,12 @@ router.put(
   authenticate,
   authorizeAdmin,
   [
-    param("id").isInt().withMessage("ID must be an integer"),
+    param("id").custom((value) => {
+      if (!ObjectId.isValid(value)) {
+        throw new Error("ID must be a valid MongoDB ObjectId");
+      }
+      return true;
+    }),
     body("name")
       .isString()
       .notEmpty()
@@ -127,29 +183,55 @@ router.put(
       .isFloat({ min: 0 })
       .withMessage("Price must be a non-negative number"),
     body("category")
-      .isInt({ min: 1 })
-      .withMessage("Category must be a non-negative integer"),
+      .custom((value) => {
+        if (!ObjectId.isValid(value)) {
+          throw new Error("Category ID must be a valid MongoDB ObjectId");
+        }
+        return true;
+      })
+      .withMessage("Category ID must be a valid ObjectId"),
   ],
   handleValidationErrors,
   async (req, res) => {
+    const db = await getDb();
     try {
-      const id = Number(req.params.id);
-      const { name, quantity, price, category } = req.body;
-      const [result] = await pool.execute(
-        `UPDATE items
-         SET name = ?, quantity = ?, price = ?, category_id = ?, updated_on = UNIX_TIMESTAMP()
-         WHERE id = ?`,
-        [name, quantity, price, category, id]
+      const id = req.params.id;
+      const { name, quantity, price, category: categoryIdString } = req.body;
+
+      const categoryExists = await db
+        .collection("categories")
+        .findOne({ _id: new ObjectId(categoryIdString) });
+      if (!categoryExists) {
+        return res
+          .status(400)
+          .json({ errors: [{ path: "category", msg: "Category not found" }] });
+      }
+
+      const result = await db.collection("items").findOneAndUpdate(
+        { _id: new ObjectId(id) },
+        {
+          $set: {
+            name,
+            quantity: parseInt(quantity, 10),
+            price: parseFloat(price),
+            category_id: new ObjectId(categoryIdString),
+            updated_on: new Date(),
+          },
+        },
+        { returnDocument: "after" }
       );
-      if (result.affectedRows === 0) {
+
+      if (!result) {
         return res.status(404).json({ error: "Item not found" });
       }
-      const [updatedRows] = await pool.query(
-        `SELECT updated_on FROM items WHERE id = ?`,
-        [id]
-      );
-      const { updated_on } = updatedRows[0];
-      res.json({ id, name, quantity, price, updated_on });
+      res.json({
+        id: result._id,
+        name: result.name,
+        quantity: result.quantity,
+        price: result.price,
+        category: result.category_id.toHexString(),
+        updated_on: result.updated_on,
+      });
     } catch (err) {
       console.error("Error updating item:", err);
       res.status(500).json({ error: "Internal server error" });
@@ -161,15 +243,24 @@ router.delete(
   "/:id",
   authenticate,
   authorizeAdmin,
-  [param("id").isInt().withMessage("ID must be an integer")],
+  [
+    param("id").custom((value) => {
+      if (!ObjectId.isValid(value)) {
+        throw new Error("ID must be a valid MongoDB ObjectId");
+      }
+      return true;
+    }),
+  ],
   handleValidationErrors,
   async (req, res) => {
+    const db = await getDb();
     try {
-      const id = Number(req.params.id);
-      const [result] = await pool.execute("DELETE FROM items WHERE id = ?", [
-        id,
-      ]);
-      if (result.affectedRows === 0) {
+      const id = req.params.id;
+      const result = await db
+        .collection("items")
+        .deleteOne({ _id: new ObjectId(id) });
+
+      if (result.deletedCount === 0) {
         return res.status(404).json({ error: "Item not found" });
       }
       res.sendStatus(204);

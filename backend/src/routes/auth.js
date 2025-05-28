@@ -3,15 +3,20 @@ import { body, validationResult } from "express-validator";
 import { authenticate, authorizeAdmin } from "../middleware/auth.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import pool from "../db.js";
+import { connectToDatabase } from "../db.js";
 import logger from "../logger.js";
 import dotenv from "dotenv";
+import { ObjectId } from "mongodb";
 
 dotenv.config();
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET;
 const SALT_ROUNDS = 10;
+
+async function getDb() {
+  return await connectToDatabase();
+}
 
 function handleValidationErrors(req, res, next) {
   const errors = validationResult(req);
@@ -32,22 +37,29 @@ router.post(
   ],
   handleValidationErrors,
   async (req, res) => {
+    const db = await getDb();
     try {
       const { username, email, password } = req.body;
       const hash = await bcrypt.hash(password, SALT_ROUNDS);
-      const [result] = await pool.execute(
-        "INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)",
-        [username, email, hash, "user"]
-      );
+      const result = await db.collection("users").insertOne({
+        username,
+        email,
+        password: hash,
+        role: "user",
+        created_on: new Date(),
+        updated_on: new Date(),
+      });
       res.status(201).json({
-        id: result.insertId,
+        id: result.insertedId,
         username,
         email,
       });
     } catch (err) {
       logger.log("Error in /auth/register", err);
-      if (err.code === "ER_DUP_ENTRY") {
-        return res.status(409).json({ error: "User already exists" });
+      if (err.code === 11000) {
+        return res
+          .status(409)
+          .json({ error: "User already exists (email must be unique)" });
       }
       res.status(500).json({ error: "Internal server error" });
     }
@@ -62,22 +74,26 @@ router.post(
   ],
   handleValidationErrors,
   async (req, res) => {
+    const db = await getDb();
     try {
       const { email, password } = req.body;
-      const [rows] = await pool.execute(
-        "SELECT id, username, password, role FROM users WHERE email = ?",
-        [email]
-      );
-      if (rows.length === 0) {
+      const user = await db.collection("users").findOne({ email });
+
+      if (!user) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
-      const user = rows[0];
+
       const match = await bcrypt.compare(password, user.password);
       if (!match) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
+
       const token = jwt.sign(
-        { sub: user.id, username: user.username, role: user.role },
+        {
+          sub: user._id.toHexString(),
+          username: user.username,
+          role: user.role,
+        },
         JWT_SECRET,
         { expiresIn: "2h" }
       );
@@ -90,6 +106,7 @@ router.post(
 );
 
 router.get("/validate-token", async (req, res) => {
+  const db = await getDb();
   try {
     const authHeader = req.headers["authorization"];
 
@@ -98,28 +115,40 @@ router.get("/validate-token", async (req, res) => {
     }
 
     const token = authHeader.split(" ")[1];
-
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    const [rows] = await pool.execute("SELECT id FROM users WHERE id = ?", [
-      decoded.sub,
-    ]);
+    if (!ObjectId.isValid(decoded.sub)) {
+      return res
+        .status(401)
+        .json({ error: "Invalid token payload (user ID format)" });
+    }
 
-    if (rows.length === 0) {
+    const user = await db
+      .collection("users")
+      .findOne({ _id: new ObjectId(decoded.sub) });
+
+    if (!user) {
       return res.status(401).json({ error: "User no longer exists" });
     }
 
     return res.json({
       valid: true,
-      userId: decoded.sub,
-      username: decoded.username,
-      role: decoded.role,
+      userId: user._id.toHexString(),
+      username: user.username,
+      role: user.role,
     });
   } catch (err) {
     logger.log("Error in /auth/validate-token", err);
-    return res.status(401).json({ error: "Invalid or expired token" });
+    if (
+      err instanceof jwt.JsonWebTokenError ||
+      err instanceof jwt.TokenExpiredError
+    ) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
+
 router.post(
   "/change-role",
   authenticate,
@@ -133,17 +162,27 @@ router.post(
   ],
   handleValidationErrors,
   async (req, res) => {
+    const db = await getDb();
     const { role, email } = req.body;
-    console.log(req.body);
     try {
-      const [result] = await pool.execute(
-        "UPDATE users SET role = ? WHERE email = ?",
-        [role, email]
-      );
-      if (result.affectedRows === 0) {
+      const result = await db
+        .collection("users")
+        .updateOne(
+          { email: email },
+          { $set: { role: role, updated_on: new Date() } }
+        );
+
+      if (result.matchedCount === 0) {
         return res
           .status(404)
           .json({ error: `No user found with email '${email}'` });
+      }
+      if (result.modifiedCount === 0 && result.matchedCount > 0) {
+        return res
+          .status(200)
+          .json({
+            message: `User '${email}' already has the role '${role}'. No change made.`,
+          });
       }
       return res.json({
         message: `Role of '${email}' changed to '${role}' successfully.`,
