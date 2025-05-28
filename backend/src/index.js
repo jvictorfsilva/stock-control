@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import itemsRouter from "./routes/items.js";
+import CategoriesRouter from "./routes/categories.js";
 import authRouter from "./routes/auth.js";
 import "./db.js";
 
@@ -16,6 +17,7 @@ app.get("/health", (req, res) => {
   res.send("OK");
 });
 app.use("/api/items", itemsRouter);
+app.use("/api/categories", CategoriesRouter);
 app.use("/auth", authRouter);
 
 app.listen(port, () => {

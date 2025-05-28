@@ -120,7 +120,6 @@ const AuthModal = ({ open, onClose }) => {
               value={form.password}
               onChange={handleChange}
               placeholder="Enter your password"
-              renderPasswordVisibilityToggle={true}
             />
           </div>
           <div style={{ textAlign: "center", marginTop: "1.5rem" }}>
@@ -176,7 +175,6 @@ const AuthModal = ({ open, onClose }) => {
               value={form.password}
               onChange={handleChange}
               placeholder="Enter your password"
-              renderPasswordVisibilityToggle={true}
             />
           </div>
           <div style={{ textAlign: "center", marginTop: "1.5rem" }}>

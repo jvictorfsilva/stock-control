@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Modal, Button, TextInput, InlineNotification } from "@carbon/react";
 
-const DeleteModal = ({
+const DeleteCategoryModal = ({
   isOpen,
   onClose,
   onConfirm,
@@ -88,5 +88,4 @@ const DeleteModal = ({
     </Modal>
   );
 };
-
-export default DeleteModal;
+export default DeleteCategoryModal;

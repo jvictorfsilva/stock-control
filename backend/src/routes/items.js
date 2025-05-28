@@ -16,8 +16,19 @@ function handleValidationErrors(req, res, next) {
 router.get("/", async (req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT id, name, quantity, price, created_on, updated_on
-       FROM items`
+      `SELECT 
+        i.id,
+        i.name,
+        i.quantity,
+        i.price,
+        i.created_on,
+        i.updated_on,
+        c.name AS category_name
+      FROM items AS i
+      JOIN categories AS c
+          ON i.category_id = c.id
+      ORDER BY i.id ASC;
+`
     );
     res.json(rows);
   } catch (err) {
@@ -25,6 +36,29 @@ router.get("/", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+router.get(
+  "/:id",
+  [param("id").isInt().withMessage("ID must be an integer")],
+  handleValidationErrors,
+  async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const [rows] = await pool.query(
+        `SELECT name, quantity, price, category_id 
+         FROM items 
+         WHERE id = ?`,
+        [id]
+      );
+      if (rows.length === 0) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+      res.json(rows[0]);
+    } catch (err) {
+      console.error("Error fetching item by id:", err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
 
 router.post(
   "/",
@@ -41,15 +75,18 @@ router.post(
     body("price")
       .isFloat({ min: 0 })
       .withMessage("Price must be a non-negative number"),
+    body("category")
+      .isInt({ min: 1 })
+      .withMessage("Category must be a non-negative integer"),
   ],
   handleValidationErrors,
   async (req, res) => {
     try {
-      const { name, quantity, price } = req.body;
+      const { name, quantity, price, category } = req.body;
       const [result] = await pool.execute(
-        `INSERT INTO items (name, quantity, price, created_on, updated_on)
-         VALUES (?, ?, ?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
-        [name, quantity, price]
+        `INSERT INTO items (name, quantity, price, category_id, created_on, updated_on)
+         VALUES (?, ?, ?, ?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP())`,
+        [name, quantity, price, category]
       );
       const insertId = result.insertId;
       const [newItemRows] = await pool.query(
@@ -57,9 +94,15 @@ router.post(
         [insertId]
       );
       const { created_on, updated_on } = newItemRows[0];
-      res
-        .status(201)
-        .json({ id: insertId, name, quantity, price, created_on, updated_on });
+      res.status(201).json({
+        id: insertId,
+        name,
+        quantity,
+        price,
+        category,
+        created_on,
+        updated_on,
+      });
     } catch (err) {
       console.error("Error creating item:", err);
       res.status(500).json({ error: "Internal server error" });
@@ -83,17 +126,20 @@ router.put(
     body("price")
       .isFloat({ min: 0 })
       .withMessage("Price must be a non-negative number"),
+    body("category")
+      .isInt({ min: 1 })
+      .withMessage("Category must be a non-negative integer"),
   ],
   handleValidationErrors,
   async (req, res) => {
     try {
       const id = Number(req.params.id);
-      const { name, quantity, price } = req.body;
+      const { name, quantity, price, category } = req.body;
       const [result] = await pool.execute(
         `UPDATE items
-         SET name = ?, quantity = ?, price = ?, updated_on = UNIX_TIMESTAMP()
+         SET name = ?, quantity = ?, price = ?, category_id = ?, updated_on = UNIX_TIMESTAMP()
          WHERE id = ?`,
-        [name, quantity, price, id]
+        [name, quantity, price, category, id]
       );
       if (result.affectedRows === 0) {
         return res.status(404).json({ error: "Item not found" });

@@ -19,9 +19,9 @@ import {
 import { Add, Settings, ChevronLeft, ChevronRight } from "@carbon/icons-react";
 import Cookies from "js-cookie";
 import api from "../services/api";
-import DeleteItemModal from "./Items/DeleteItemModal";
-import AddItemModal from "./Items/AddItemModal";
-import EditItemModal from "./Items/EditItemModal";
+import DeleteCategoryModal from "./Categories/DeleteCategoryModal";
+import AddCategoryModal from "./Categories/AddCategoryModal";
+import EditCategoryModal from "./Categories/EditCategoryModal";
 
 const formatDate = (unixTs = Math.floor(Date.now()) / 1000) => {
   const date = new Date(unixTs * 1000);
@@ -41,7 +41,7 @@ const formatCurrentDateTime = () => {
   return `${hours12}:${minutes}:${seconds} ${ampm}`;
 };
 
-const ItemTable = () => {
+const CategoryTable = () => {
   const [initialRows, setInitialRows] = useState([]);
   const [filteredRows, setFilteredRows] = useState([]);
   const [searchValue, setSearchValue] = useState("");
@@ -51,12 +51,12 @@ const ItemTable = () => {
   const pageInputDebounceTimeoutRef = useRef(null);
 
   const [isDangerModalOpen, setIsDangerModalOpen] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState(null);
+  const [categoryToDelete, setCategoryToDelete] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [itemToEdit, setItemToEdit] = useState(null);
+  const [categoryToEdit, setCategoryToEdit] = useState(null);
   const [showNotification, setShowNotification] = useState(false);
   const [notificationKind, setNotificationKind] = useState("success");
   const [notificationTitle, setNotificationTitle] = useState("");
@@ -66,25 +66,21 @@ const ItemTable = () => {
 
   const headers = [
     { key: "id", header: "ID" },
-    { key: "name", header: "Name" },
-    { key: "category_name", header: "Categories" },
-    { key: "quantity", header: "Quantity" },
-    { key: "price", header: "Price" },
+    { key: "name", header: "Category Name" },
+    { key: "item_count", header: "Item Amount" },
     { key: "created_on", header: "Created On" },
     { key: "updated_on", header: "Updated On" },
   ];
 
-  const fetchItems = async () => {
+  const fetchCategories = async () => {
     try {
-      const { data } = await api.get("/items/");
-      const formattedData = data.map((item) => ({
-        id: item.id.toString(),
-        name: item.name,
-        category_name: item.category_name,
-        quantity: item.quantity,
-        price: item.price,
-        created_on: formatDate(item.created_on),
-        updated_on: formatDate(item.updated_on),
+      const { data } = await api.get("/categories/");
+      const formattedData = data.map((cat) => ({
+        id: cat.id.toString(),
+        name: cat.name,
+        item_count: cat.item_count.toString(),
+        created_on: formatDate(cat.created_on),
+        updated_on: formatDate(cat.updated_on),
       }));
       setInitialRows(formattedData);
       setFilteredRows(formattedData);
@@ -93,19 +89,19 @@ const ItemTable = () => {
       setFetchError(
         err.response?.data?.message ||
           err.message ||
-          "Could not load items list."
+          "Could not load categories list."
       );
       setNotificationKind("error");
-      setNotificationTitle("Error Loading Items");
+      setNotificationTitle("Error Loading Categories");
       setNotificationSubtitle(
-        "Could not load the items list. Please try again later."
+        "Could not load the categories list. Please try again later."
       );
       setShowNotification(true);
     }
   };
 
   useEffect(() => {
-    fetchItems();
+    fetchCategories();
     return () => {
       if (pageInputDebounceTimeoutRef.current) {
         clearTimeout(pageInputDebounceTimeoutRef.current);
@@ -141,66 +137,61 @@ const ItemTable = () => {
     }
   };
 
-  const handleEditClick = (item) => {
-    setItemToEdit(item);
+  const handleEditClick = (id) => {
+    setCategoryToEdit(id);
     setIsEditOpen(true);
   };
 
   const handleDeleteClick = (rowId) => {
-    const item = initialRows.find((item) => item.id === rowId);
-    if (item) {
-      setItemToDelete(item);
+    const cat = initialRows.find((cat) => cat.id === rowId);
+    if (cat) {
+      setCategoryToDelete(cat);
       setIsDangerModalOpen(true);
       setDeleteError(null);
     } else {
       setNotificationKind("error");
       setNotificationTitle("Error");
-      setNotificationSubtitle("Selected item not found.");
+      setNotificationSubtitle("Selected category not found.");
       setShowNotification(true);
     }
   };
 
-  const confirmDeleteItem = async () => {
-    if (!itemToDelete) return;
-
+  const confirmDelete = async () => {
+    if (!categoryToDelete) return;
     setDeleteLoading(true);
     setDeleteError(null);
-
     try {
       const userToken = Cookies.get("userToken");
-
       if (!userToken) {
         throw new Error("Authentication token not found in cookies.");
       }
-
-      await api.delete(`/items/${itemToDelete.id}`, {
+      await api.delete(`/categories/${categoryToDelete.id}`, {
         headers: {
           Authorization: `Bearer ${userToken}`,
         },
       });
-
       setInitialRows((prevRows) =>
-        prevRows.filter((row) => row.id !== itemToDelete.id)
+        prevRows.filter((row) => row.id !== categoryToDelete.id)
       );
       setFilteredRows((prevRows) =>
-        prevRows.filter((row) => row.id !== itemToDelete.id)
+        prevRows.filter((row) => row.id !== categoryToDelete.id)
       );
-
       setNotificationKind("success");
-      setNotificationTitle("Item Deleted");
+      setNotificationTitle("Category Deleted");
       setNotificationSubtitle(
-        `The item "${itemToDelete.name}" was deleted successfully.`
+        `The category "${categoryToDelete.name}" was deleted successfully.`
       );
       setShowNotification(true);
-
       setIsDangerModalOpen(false);
-      setItemToDelete(null);
+      setCategoryToDelete(null);
     } catch (err) {
       const message =
-        err.response?.data?.detail || err.message || "Failed to delete item.";
+        err.response?.data?.detail ||
+        err.message ||
+        "Failed to delete Category.";
       setDeleteError(message);
       setNotificationKind("error");
-      setNotificationTitle("Failed to Delete Item");
+      setNotificationTitle("Failed to Delete Category");
       setNotificationSubtitle(message);
       setShowNotification(true);
     } finally {
@@ -255,14 +246,14 @@ const ItemTable = () => {
           getTableProps,
           getTableContainerProps,
         }) => (
-          <TableContainer title="Items List" {...getTableContainerProps()}>
+          <TableContainer title="Categories List" {...getTableContainerProps()}>
             <TableToolbar>
               <TableToolbarContent
                 style={{ display: "flex", justifyContent: "flex-end" }}
               >
                 <TableToolbarSearch
-                  labelText="Search items"
-                  placeholder="Search items..."
+                  labelText="Search categories"
+                  placeholder="Search categories..."
                   value={searchValue}
                   onChange={handleSearchChange}
                 />
@@ -276,7 +267,7 @@ const ItemTable = () => {
                 >
                   <div style={{ padding: "0.5rem 1rem" }}>
                     <label htmlFor="pageSize" style={{ marginRight: "0.5rem" }}>
-                      Items per page:
+                      Rows per page:
                     </label>
                     <input
                       id="pageSize"
@@ -292,13 +283,12 @@ const ItemTable = () => {
                     />
                   </div>
                 </OverflowMenu>
-
                 <Button
                   renderIcon={Add}
-                  iconDescription="Add Item"
+                  iconDescription="Add Category"
                   onClick={() => setIsAddOpen(true)}
                 >
-                  Add Item
+                  Add Category
                 </Button>
               </TableToolbarContent>
             </TableToolbar>
@@ -434,13 +424,13 @@ const ItemTable = () => {
         )}
       </DataTable>
 
-      {itemToDelete && (
-        <DeleteItemModal
+      {categoryToDelete && (
+        <DeleteCategoryModal
           isOpen={isDangerModalOpen}
           onClose={() => setIsDangerModalOpen(false)}
-          onConfirm={confirmDeleteItem}
-          modalHeading={`Delete item "${itemToDelete.name}"?`}
-          modalBody={`This action cannot be undone. All data associated with "${itemToDelete.name}" will be permanently removed. Please confirm you wish to proceed.`}
+          onConfirm={confirmDelete}
+          modalHeading={`Delete category "${categoryToDelete.name}"?`}
+          modalBody={`This action cannot be undone. All data associated with "${categoryToDelete.name}" will be permanently removed. Please confirm you wish to proceed.`}
           confirmButtonText={deleteLoading ? "Deleting..." : "Delete"}
           cancelButtonText="Cancel"
           confirmationTextRequired="delete"
@@ -448,7 +438,7 @@ const ItemTable = () => {
           error={deleteError}
         />
       )}
-      <AddItemModal
+      <AddCategoryModal
         open={isAddOpen}
         onClose={() => setIsAddOpen(false)}
         onSuccess={onAddSuccess}
@@ -458,10 +448,11 @@ const ItemTable = () => {
         setNotificationSubtitle={setNotificationSubtitle}
       />
 
-      <EditItemModal
+      <EditCategoryModal
         open={isEditOpen}
         onClose={() => setIsEditOpen(false)}
-        itemId={itemToEdit}
+        categoryId={categoryToEdit}
+        itemId={categoryToEdit}
         onSuccess={onEditSuccess}
         showNotification={setShowNotification}
         setNotificationKind={setNotificationKind}
@@ -472,4 +463,4 @@ const ItemTable = () => {
   );
 };
 
-export default ItemTable;
+export default CategoryTable;
