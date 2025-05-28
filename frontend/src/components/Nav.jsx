@@ -1,7 +1,7 @@
 import React from "react";
 import { HeaderNavigation, HeaderMenuItem } from "@carbon/react";
 
-export function Nav({ isAdmin, currentPath }) {
+export function Nav({ isAdmin, currentPath, onAdminClick }) {
   return (
     <HeaderNavigation aria-label="Main Navigation">
       <HeaderMenuItem
@@ -18,8 +18,13 @@ export function Nav({ isAdmin, currentPath }) {
       </HeaderMenuItem>
       {isAdmin && (
         <HeaderMenuItem
-          href="/admin"
+          onClick={onAdminClick}
           aria-current={currentPath === "/admin" ? "page" : undefined}
+          role="button"
+          tabIndex={0}
+          onKeyPress={(e) => {
+            if (e.key === "Enter" || e.key === " ") onAdminClick();
+          }}
         >
           Admin
         </HeaderMenuItem>
