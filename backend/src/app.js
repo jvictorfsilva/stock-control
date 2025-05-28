@@ -10,10 +10,15 @@ dotenv.config();
 
 const app = express();
 
+const allowedOrigin =
+  process.env.NODE_ENV === "PROD"
+    ? "https://stock-control-teal.vercel.app"
+    : "http://localhost:3000";
+
 app.use(
   cors({
-    origin: "https://stock-control-teal.vercel.app",
-    credentials: true,
+    origin: allowedOrigin,
+    credentials: false,
   })
 );
 
