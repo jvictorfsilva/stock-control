@@ -37,7 +37,7 @@ const AddItemModal = ({
         .then(({ data }) => setCategories(data))
         .catch((err) => console.error("Failed to load categories", err));
       setError("");
-      setFormValues({ name: "", quantity: 0, price: 0, category: 0 });
+      setFormValues({ name: "", quantity: 0, price: 0, category: "" });
     }
   }, [open]);
 
@@ -47,7 +47,7 @@ const AddItemModal = ({
   };
 
   const handleSelectChange = (e) => {
-    setFormValues((prev) => ({ ...prev, category: Number(e.target.value) }));
+    setFormValues((prev) => ({ ...prev, category: e.target.value }));
   };
 
   const handleSubmit = async () => {

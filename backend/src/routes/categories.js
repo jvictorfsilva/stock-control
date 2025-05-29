@@ -58,6 +58,35 @@ router.get("/", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+router.get(
+  "/:id",
+  [
+    param("id").custom((value) => {
+      if (!ObjectId.isValid(value)) {
+        throw new Error("ID must be a valid MongoDB ObjectId");
+      }
+      return true;
+    }),
+  ],
+  handleValidationErrors,
+  async (req, res) => {
+    const db = await getDb();
+    try {
+      const id = req.params.id;
+      const item = await db
+        .collection("categories")
+        .findOne({ _id: new ObjectId(id) }, { projection: { name: 1 } });
+
+      if (!item) {
+        return res.status(404).json({ error: "Item not found" });
+      }
+      res.json({ ...item, id: item._id });
+    } catch (err) {
+      console.error("Error fetching item by id:", err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
 
 router.post(
   "/",
@@ -75,10 +104,11 @@ router.post(
     const db = await getDb();
     try {
       const { name } = req.body;
+      const currentTime = Math.floor(Date.now() / 1000);
       const newCategory = {
         name,
-        created_on: new Date(),
-        updated_on: new Date(),
+        created_on: currentTime,
+        updated_on: currentTime,
       };
       const result = await db.collection("categories").insertOne(newCategory);
       res.status(201).json({
@@ -117,11 +147,12 @@ router.put(
     try {
       const id = req.params.id;
       const { name } = req.body;
+      const currentTime = Math.floor(Date.now() / 1000);
       const result = await db
         .collection("categories")
         .findOneAndUpdate(
           { _id: new ObjectId(id) },
-          { $set: { name: name, updated_on: new Date() } },
+          { $set: { name: name, updated_on: currentTime } },
           { returnDocument: "after" }
         );
 

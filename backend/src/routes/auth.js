@@ -41,13 +41,14 @@ router.post(
     try {
       const { username, email, password } = req.body;
       const hash = await bcrypt.hash(password, SALT_ROUNDS);
+      const currentTime = Math.floor(Date.now() / 1000);
       const result = await db.collection("users").insertOne({
         username,
         email,
         password: hash,
         role: "user",
-        created_on: new Date(),
-        updated_on: new Date(),
+        created_on: currentTime,
+        updated_on: currentTime,
       });
       res.status(201).json({
         id: result.insertedId,
@@ -178,11 +179,9 @@ router.post(
           .json({ error: `No user found with email '${email}'` });
       }
       if (result.modifiedCount === 0 && result.matchedCount > 0) {
-        return res
-          .status(200)
-          .json({
-            message: `User '${email}' already has the role '${role}'. No change made.`,
-          });
+        return res.status(200).json({
+          message: `User '${email}' already has the role '${role}'. No change made.`,
+        });
       }
       return res.json({
         message: `Role of '${email}' changed to '${role}' successfully.`,

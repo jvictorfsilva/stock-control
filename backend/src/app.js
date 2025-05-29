@@ -12,7 +12,7 @@ const app = express();
 
 const allowedOrigin =
   process.env.NODE_ENV === "PROD"
-    ? "https://stock-control-teal.vercel.app"
+    ? process.env.ALLOWED_DOMAIN
     : "http://localhost:3000";
 
 app.use(

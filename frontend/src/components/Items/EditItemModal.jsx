@@ -26,7 +26,7 @@ const EditItemModal = ({
     name: "",
     quantity: 0,
     price: 0,
-    category: 0,
+    category: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -72,7 +72,7 @@ const EditItemModal = ({
     setFormValues((prev) => ({ ...prev, [field]: value }));
   };
   const handleSelectChange = (e) => {
-    setFormValues((prev) => ({ ...prev, category: Number(e.target.value) }));
+    setFormValues((prev) => ({ ...prev, category: e.target.value }));
   };
 
   const handleSubmit = async () => {

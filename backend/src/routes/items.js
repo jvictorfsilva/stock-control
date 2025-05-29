@@ -136,13 +136,14 @@ router.post(
           .json({ errors: [{ path: "category", msg: "Category not found" }] });
       }
 
+      const currentTime = Math.floor(Date.now() / 1000);
       const newItem = {
         name,
         quantity: parseInt(quantity, 10),
         price: parseFloat(price),
         category_id: new ObjectId(categoryIdString),
-        created_on: new Date(),
-        updated_on: new Date(),
+        created_on: currentTime,
+        updated_on: currentTime,
       };
       const result = await db.collection("items").insertOne(newItem);
       res.status(201).json({
@@ -207,6 +208,7 @@ router.put(
           .json({ errors: [{ path: "category", msg: "Category not found" }] });
       }
 
+      const currentTime = Math.floor(Date.now() / 1000);
       const result = await db.collection("items").findOneAndUpdate(
         { _id: new ObjectId(id) },
         {
@@ -215,7 +217,7 @@ router.put(
             quantity: parseInt(quantity, 10),
             price: parseFloat(price),
             category_id: new ObjectId(categoryIdString),
-            updated_on: new Date(),
+            updated_on: currentTime,
           },
         },
         { returnDocument: "after" }
